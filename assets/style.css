@@ -1,0 +1,104 @@
+.firstHeader {
+  margin-top: 50px !important; 
+}
+
+#chartHeader {
+  font-size: 20px;
+  font-family: 'helvetica';
+  margin-top: 15px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+h2 {
+  padding: 30px;
+  margin: 0;
+  background-color: rgb(198, 217, 235);
+}
+
+.container-fluid {
+  background-color: rgb(240,240,240);
+  padding-bottom: 25px;
+  padding-left: 5%;
+  padding-right: 5%;
+}
+
+.shiny-input-panel {
+  height: 0;
+  width: 0;
+  margin: 0;
+  padding: 0;
+}
+
+#selectRunTab {
+  width: 100%;
+}
+
+.tabbable {
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+#overview {
+  padding-left: 0;
+  padding-right: 0;
+  padding-top: 10px;
+}
+
+.col-sm-4 {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+#selectBossOops {
+  position: fixed;
+  z-index: 100;
+  right: 1%;
+  top: 30px;
+  margin: 0;
+}
+
+#inputPanelTop {
+  position: fixed;
+  z-index: 2;
+  right: 0;
+  top: 15px;
+}
+
+.navbar {
+  z-index: 1;
+}
+
+#selectRun {
+  font-size: 14px;
+}
+
+.selectize-input {
+  border-radius: 0;
+}
+
+.row {
+  margin-left: 0;
+  margin-right: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+tr.odd:hover {
+  background-color: rgb(249, 249, 249) !important;
+}
+
+tr.even:hover {
+  background-color: rgb(240, 240, 240) !important;
+}
+
+.dt-body-center {
+  text-align: center;
+}
+
+#colourKey {
+  text-align: center;
+  font-weight: bold;
+  margin-top: 20px;
+  overflow: hidden;
+}
