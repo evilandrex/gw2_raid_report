@@ -1,6 +1,7 @@
 #Load packages
 library("rvest")
 library('httr')
+library('jsonlite')
 
 colNames <- c('Entry', 
               'Boss', 
@@ -58,6 +59,22 @@ buffNames <- c('Aegis',
                'Illusion of Defense',
                'Vampiric Presence'
 )
+
+# Specialization list
+spec_ids <- read_json('https://api.guildwars2.com/v2/specializations')
+specializations <- c()
+for (id in spec_ids) {
+  # Temporarily pull specialization
+  temp <- read_json(paste('https://api.guildwars2.com/v2/specializations', id, 
+                          sep = '/'))
+  
+  # If elite spec, add it to the list
+  if (temp$elite) {
+    specializations <- c(specializations, temp$name, temp$profession)
+  }
+}
+# Remove repeats
+specializations <- unique(specializations)
 
 #Skil List
 Guardian <- list(Greatsword = c('Whirling Wrath', 'Leap of Faith', 'Symbol of Wrath', 'Binding Blade'),
@@ -174,6 +191,136 @@ Reaper <- list(Greatsword = c('Gravedigger', 'Death Spiral', 'Nightfall', 'Grasp
 Reaper <- c(Necromancer, Reaper)
 Scourge <- list(TorchOff = c('Harrowing Wave', 'Oppressive Collapse'))
 Scourge <- c(Necromancer, Scourge)
+
+htmlParser2 <- function(parsed, team) {
+  html <- read_html(parsed$permalink) %>% html_nodes('body')
+  
+  # Create data.frames, structures match sql database
+  encounterData <- data.frame(
+    fight_id = parsed$id,
+    team = team,
+    boss = parsed$encounter$boss,
+    success = parsed$encounter$success,
+    date = parsed$encounterTime, 
+    duration = NA, 
+    team_dps = NA, 
+    damage_done = NA,
+    player1 = try(parsed$players[[1]]$character_name, silent = TRUE),
+    player2 = try(parsed$players[[2]]$character_name, silent = TRUE),
+    player3 = try(parsed$players[[3]]$character_name, silent = TRUE),
+    player4 = try(parsed$players[[4]]$character_name, silent = TRUE),
+    player5 = try(parsed$players[[5]]$character_name, silent = TRUE),
+    player6 = try(parsed$players[[6]]$character_name, silent = TRUE),
+    player7 = try(parsed$players[[7]]$character_name, silent = TRUE),
+    player8 = try(parsed$players[[8]]$character_name, silent = TRUE),
+    player9 = try(parsed$players[[9]]$character_name, silent = TRUE),
+    player10 = try(parsed$players[[10]]$character_name, silent = TRUE)
+  )
+  playerData <- data.frame(fight_id = NA,
+                           player_name = NA,
+                           char_name = NA,
+                           specialization = NA,
+                           total_dps = NA,
+                           power_dps = NA,
+                           condi_dps = NA,
+                           crit_percent = NA,
+                           above90_percent = NA,
+                           downed_count = NA,
+                           dead_at = NA,
+                           subgroup = NA,
+                           wep1 = NA,
+                           wep2 = NA,
+                           wep3 = NA,
+                           wep4 = NA, 
+                           gear_stats = NA)
+  buffData <- data.frame(fight_id = NA,
+                         char_name = NA,
+                         might = NA,
+                         fury = NA,
+                         quickness = NA,
+                         alacrity = NA,
+                         protection = NA,
+                         regeneration = NA,
+                         vigor = NA,
+                         aegis = NA,
+                         stability = NA,
+                         swiftness = NA,
+                         retaliation = NA,
+                         resistance = NA,
+                         banner_strength = NA,
+                         banner_discipline = NA,
+                         empowered_allies = NA,
+                         spirit_frost = NA,
+                         spirit_sun = NA,
+                         spirit_storm = NA,
+                         spirit_earth = NA,
+                         spirit_water = NA,
+                         glyph_empowerment = NA,
+                         spotter = NA,
+                         assassins_presence = NA,
+                         pinpoint_distribution = NA,
+                         vampiric_presence = NA)
+  
+  # Add fight duration
+  duration <- html_node(html, 
+                        xpath = '/html/body/div/div[1]/div[1]/div/div/blockquote/div/div[2]/p[3]') %>% 
+    html_text %>% strsplit(' ')
+  minutes <- substr(duration[[1]][2], 1, nchar(duration[[1]][2]) - 1) %>%
+    as.numeric() * 60
+  duration <- substr(duration[[1]][3], 1, nchar(duration[[1]][3]) - 1) %>%
+    as.numeric() + minutes
+  encounterData$duration <- duration
+  
+  # DPS data table
+  dps_table <- html_nodes(html, xpath = '//*[@id="dps_table0"]') %>% 
+    html_table() %>% data.frame()
+  
+  # Add total dps to encounter data and calcualte total damage
+  encounterData$team_dps <- dps_table$Boss.DPS[dps_table$Name == 'Total']
+  encounterData$damage_done <- encounterData$duration * encounterData$team_dps
+  
+  # Get data for each player
+  playerNames <- names(parsed$players)
+  for (player in playerNames) {
+    playerInfo <- eval(parse(text = paste('parsed$player$"', player, '"', 
+                                          sep = '')))
+    playerTemp <- data.frame(
+      fight_id = parsed$id,
+      player_name = playerInfo$display_name,
+      char_name = player,
+      #NOTE: Need to figure out what happens to core professions
+      specialization = read_json(
+        paste('https://api.guildwars2.com/v2/specializations', 
+              playerInfo$elite_spec, 
+              sep = '/'))$name, 
+      total_dps = dps_table$Boss.DPS[dps_table$Name == player],
+      power_dps = dps_table$Power[dps_table$Name == player],
+      condi_dps = dps_table$Condi[dps_table$Name == player],
+      crit_percent = NA,
+      above90_percent = NA,
+      downed_count = dps_table$Var.11[dps_table$Name == player],
+      dead_at = dps_table$Var.12[dps_table$Name == player],
+      subgroup = NA,
+      wep1 = NA,
+      wep2 = NA,
+      wep3 = NA,
+      wep4 = NA, 
+      gear_stats = NA
+    )
+  }
+    
+    # Loop through each subgroup
+  composition <- html_nodes(html, 'div table')[1] %>% html_children()
+  
+  for (subgroup in composition) {
+    # Loop through each player
+    players <- html_nodes(subgroup, 'td')
+    text <- ''
+    for (player in players) {
+      images <- html_nodes(players, 'img') %>% html_attr('alt')
+    }
+  }
+}
 
 htmlParser <- function(htmlFile) {
   #Function to check rotation skills to be used in lapply
