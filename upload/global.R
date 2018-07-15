@@ -1,5 +1,6 @@
 #Load packages
 library("rvest")
+library('httr')
 
 colNames <- c('Entry', 
               'Boss', 
