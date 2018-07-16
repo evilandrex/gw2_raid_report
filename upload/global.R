@@ -2,6 +2,7 @@
 library("rvest")
 library('httr')
 library('jsonlite')
+library('RMySQL')
 
 htmlParser <- function(parsed, team = 'NoTeam') {
   html <- read_html(parsed$permalink) %>% html_nodes('body')
