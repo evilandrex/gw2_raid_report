@@ -33,55 +33,25 @@ shinyServer(function(input, output, session) {
                                      file = upload_file(toUpload)
                                      )))
           
-          # Increment progress 
+          # Increment progress for finished dps.report parse
           progress$inc(amount = 0.5)
           
+          # Convert parsed data into dataframes
+          dataframes <- htmlParser(parsed)
           
-          # # Look for the parsed file in the directory
-          # htmlFile <- list.files(getwd())
-          # htmlFile <- htmlFile[which(grepl(".html", htmlFile))]
-          # 
-          # # Get boss name
-          # match <- gregexpr("([[:alpha:]]{2,5})(?=\\.)", htmlFile, perl = TRUE)
-          # boss <- regmatches(htmlFile, match)
-          # 
-          # # Get a formatted date string
-          # dateInfo <- as.Date(substr(inFile$name[file], 1, 8), "%Y%m%d")
-          # date <- format(dateInfo, format = "%b-%d-%Y")
-          # 
-          # # Rename file
-          # file.rename(htmlFile, gsub("[[:digit:]+]", date, htmlFile))
-          # 
-          # # Look for the renamed file in the directory
-          # htmlFile <- list.files(getwd())
-          # htmlFile <- htmlFile[which(grepl(".html", htmlFile))]
-          # 
-          # # Parse the HTML file into a text file using parse function
-          # data <- htmlParser(htmlFile)
-          # 
-          # # Increment progress 
-          # progress$inc(amount = 0.5)
-          # 
-          # if (is.data.frame(data)) {
-          #   # Export data file
-          #   write.table(data, gsub('.html', '.txt', htmlFile), sep = "\t", row.names = FALSE)
-          #   file.copy(gsub('.html', '.txt', htmlFile), paste('../Data/', boss, '/', gsub('.html', '.txt', htmlFile), sep = ''), overwrite = TRUE)
-          #   file.remove(gsub('.html', '.txt', htmlFile))
-          #   
-          #   # Moved the finished file into parsed directory
-          #   file.copy(htmlFile, paste('../RaidHeroesLogs/', boss, '/', htmlFile, sep = ''), overwrite = TRUE)
-          #   file.remove(htmlFile)
-          #   
-          #   # Concatenate the completed file to report vector
-          #   outputText <- rbind(outputText, data.frame('File' = inFile$name[file], 'Parsed' = htmlFile, 'Report' = 'Success'))
-          # } else {
-          #   outputText = rbind(outputText, data.frame('File' = inFile$name[file], 'Parsed' = htmlFile, 'Report' = data))
-          #   file.remove(htmlFile)
-          #   }
+          # WRITE DATA TO SQL DATABASE
+          
+          # Increment progress for database saving
+          progress$inc(amount = 0.5)
+          
+          # Update output text 
+          outputText <- rbind(outputText, data.frame('File' = inFile$name[file],
+                                                     'Link' = parsed$permalink,
+                                                     'Report' = 'Success')) # NOTE: NEED TO IMPLEMENT THIS
         }
       }
       progress$close()
-      return(link = parsed$permalink)
+      return(outputText)
       })
   }
 )
