@@ -164,6 +164,9 @@ htmlParser <- function(parsed, team = 'NoTeam') {
   buffTable[,percentageIndex] <- lapply(buffTable[,percentageIndex], 
                                         function(x) 
                                           as.numeric(gsub('%', '', x))/100)
+  # Add fight_id to table
+  buffTable$fight_id <- parsed$id
+  
   return(list(encounterData = encounterData,
               playerData = playerData,
               buffData = buffTable))
