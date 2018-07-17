@@ -1,5 +1,5 @@
 library(shiny)
-options(shiny.maxRequestSize=20*1024^2) 
+options(shiny.maxRequestSize=50*1024^2) 
 
 shinyServer(function(input, output, session) {
     output$fileName <- renderTable({
