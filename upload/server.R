@@ -39,7 +39,8 @@ shinyServer(function(input, output, session) {
           # Convert parsed data into dataframes
           dataframes <- htmlParser(parsed)
           
-          # WRITE DATA TO SQL DATABASE
+          # Write data to SQL database
+          sendData(dataframes)
           
           # Increment progress for database saving
           progress$inc(amount = 0.5)

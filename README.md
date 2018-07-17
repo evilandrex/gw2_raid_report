@@ -10,7 +10,7 @@ CREATE TABLE encounter_data (
   fight_id VARCHAR(50) PRIMARY KEY,
   team VARCHAR(50),
   boss VARCHAR(50),
-  sucess INT,
+  success INT,
   date INT,
   duration INT,
   team_dps INT,

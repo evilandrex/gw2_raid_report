@@ -200,7 +200,166 @@ htmlParser <- function(parsed, team = 'NoTeam') {
 }
 
 sendData <- function(parsedResults) {
+  # Piece out dataframes from parsedResults
+  enc <- parsedResults$encounterData
+  play <- parsedResults$playerData
+  buff <- parsedResults$buffData
   
+  # Connect to database
+  conn <- dbConnect(
+    drv = MySQL(),
+    dbname = "raid_report",
+    host = '127.0.0.1',
+    port = 3306,
+    username = "root",
+    password = "andrexianstore")
+  
+  # Forces exit when database finishes
+  on.exit(dbDisconnect(conn), add = TRUE)
+  
+  # Create query string with empty spots
+  query <- paste(
+    'INSERT INTO encounter_data SET ',
+    'fight_id = ?fight_id, ',
+    'team = ?team, ',
+    'boss = ?boss, ',
+    'success = ?success, ',
+    'date = ?date, ',
+    'duration = ?duration, ',
+    'team_dps = ?team_dps, ',
+    'damage_done = ?damage_done, ',
+    'player1 = ?player1, ',
+    'player2 = ?player2, ',
+    'player3 = ?player3, ',
+    'player4 = ?player4, ',
+    'player5 = ?player5, ',
+    'player6 = ?player6, ',
+    'player7 = ?player7, ',
+    'player8 = ?player8, ',
+    'player9 = ?player9, ',
+    'player10 = ?player10',
+    sep = '')
+  query <- sqlInterpolate(conn, query, 
+                          fight_id = as.character(enc$fight_id),
+                          team = as.character(enc$team),
+                          boss = as.character(enc$boss),
+                          success = enc$success,
+                          date = enc$date,
+                          duration = enc$duration,
+                          team_dps = enc$team_dps,
+                          damage_done = enc$damage_done,
+                          player1 = as.character(enc$player1),
+                          player2 = as.character(enc$player2),
+                          player3 = as.character(enc$player3),
+                          player4 = as.character(enc$player4),
+                          player5 = as.character(enc$player5),
+                          player6 = as.character(enc$player6),
+                          player7 = as.character(enc$player7),
+                          player8 = as.character(enc$player8),
+                          player9 = as.character(enc$player9),
+                          player10 = as.character(enc$player10)
+                          )
+  dbGetQuery(conn, query)
+  
+  playQuery <- paste(
+    'INSERT INTO player_data SET ',
+    'fight_id = ?fight_id, ',
+    'player_name = ?player_name, ',
+    'char_name = ?char_name, ',
+    'specialization = ?specialization, ',
+    'total_dps = ?total_dps, ',
+    'power_dps = ?power_dps, ',
+    'condi_dps = ?condi_dps, ',
+    'crit_percent = ?crit_percent, ',
+    'above90_percent = ?above90_percent, ',
+    'downed_count = ?downed_count, ',
+    'dead_at = ?dead_at, ',
+    'subgroup = ?subgroup, ',
+    'wep1 = ?wep1, ',
+    'wep2 = ?wep2, ',
+    'wep3 = ?wep3, ',
+    'wep4 = ?wep4, ',
+    'gear_stats = ?gear_stats',
+    sep = '')
+  
+  for (player in 1:nrow(play)) {
+    query <- sqlInterpolate(conn, playQuery,
+                            fight_id = as.character(play$fight_id[player]),
+                            player_name = as.character(play$player_name[player]),
+                            char_name = as.character(play$char_name[player]),
+                            specialization = as.character(play$specialization[player]),
+                            total_dps = play$total_dps[player],
+                            power_dps = play$power_dps[player],
+                            condi_dps = play$condi_dps[player],
+                            crit_percent = play$crit_percent[player],
+                            above90_percent = play$above90_percent[player],
+                            downed_count = play$downed_count[player],
+                            dead_at = play$dead_at[player],
+                            subgroup = play$subgroup[player],
+                            wep1 = as.character(play$wep1[player]),
+                            wep2 = as.character(play$wep2[player]),
+                            wep3 = as.character(play$wep3[player]),
+                            wep4 = as.character(play$wep4[player]),
+                            gear_stats = as.character(play$gear_stats[player]))
+    dbGetQuery(conn, query)
+  }
+  
+  # Check if any new columns need to be made
+  buffList <- dbGetQuery(conn, 'SHOW COLUMNS FROM buff_data')$Field
+  buffToAdd <- names(buff)[!names(buff) %in% buffList]
+  
+  # Add columns as necessary
+  for (newColumn in buffToAdd) {
+    query <- 'ALTER TABLE buff_data ADD ?newColumn FLOAT;'
+    query <- sqlInterpolate(conn, query, newColumn = as.factor(newColumn))
+    dbGetQuery(conn, query)
+  }
+  
+  # Create buff query
+  buffQuery <- paste(
+    'INSERT INTO buff_data SET ',
+    'fight_id = ?fight_id, ',
+    'player_name = ?player_name, ',
+    'char_name = ?char_name, ',
+    'specialization = ?specialization, ',
+    'total_dps = ?total_dps, ',
+    'power_dps = ?power_dps, ',
+    'condi_dps = ?condi_dps, ',
+    'crit_percent = ?crit_percent, ',
+    'above90_percent = ?above90_percent, ',
+    'downed_count = ?downed_count, ',
+    'dead_at = ?dead_at, ',
+    'subgroup = ?subgroup, ',
+    'wep1 = ?wep1, ',
+    'wep2 = ?wep2, ',
+    'wep3 = ?wep3, ',
+    'wep4 = ?wep4, ',
+    'gear_stats = ?gear_stats',
+    sep = '')
+  
+  # Get new buffList
+  buffList <- dbGetQuery(conn, 'SHOW COLUMNS FROM buff_data')$Field
+  
+  # Create new query to insert data based on available columns
+  buffQuery = 'INSERT INTO buff_data SET '
+  buffQuery = paste(buffQuery, 
+                    paste(buffList, " = ?", buffList, sep = '', collapse = ', '), 
+                    sep = '')
+  buffList <- buffList[3:length(buffList)]
+  
+  # Add buff data per player
+  for (player in 1:nrow(play)) {
+    # Create strings for query
+    baseString <- paste('query <- sqlInterpolate(conn, buffQuery, ',
+                        'fight_id = buff$fight_id[player], ',
+                        'char_name = buff$char_name[player], ', sep = '')
+    buffString <- paste(buffList, ' = buff$', buffList, '[player]', 
+                       sep = '', collapse = ', ')
+    fullString <- paste(baseString, buffString, ')', sep = '')
+    eval(parse(text = fullString))
+    
+    dbGetQuery(conn, query)
+  }
 }
 
 # Tester block
