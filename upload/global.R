@@ -4,6 +4,26 @@ library('httr')
 library('jsonlite')
 library('RMySQL')
 
+timeToSeconds <- function(time) {
+  time <- as.character(time)
+  
+  if (time == '0') {
+    return(0)
+  }
+  
+  timeString <- strsplit(time, split = '\\w(?=[\\d])', perl = TRUE)[[1]]
+  seconds <- 0
+  for (string in timeString) {
+    if (strsplit(string, ' ')[[1]][2] == 'm') {
+      temp <- as.numeric(strsplit(string, ' ')[[1]][1]) * 60
+      seconds <- seconds + temp
+    } else {
+      seconds <- seconds + as.numeric(strsplit(string, ' ')[[1]][1])
+    }
+  }
+  return(seconds)
+}
+
 htmlParser <- function(parsed, team = 'NoTeam') {
   html <- read_html(parsed$permalink) %>% html_nodes('body')
   
@@ -12,7 +32,7 @@ htmlParser <- function(parsed, team = 'NoTeam') {
     fight_id = parsed$id,
     team = team,
     boss = parsed$encounter$boss,
-    success = parsed$encounter$success,
+    success = as.numeric(parsed$encounter$success),
     date = parsed$encounterTime, 
     duration = NA, 
     team_dps = NA, 
@@ -74,10 +94,14 @@ htmlParser <- function(parsed, team = 'NoTeam') {
       total_dps = dps_table$Boss.DPS[dps_table$Name == player],
       power_dps = dps_table$Power[dps_table$Name == player],
       condi_dps = dps_table$Condi[dps_table$Name == player],
-      crit_percent = damage_table$Var.4[damage_table$Name == player],
-      above90_percent = damage_table$Var.5[damage_table$Name == player],
+      crit_percent = gsub('%', '', 
+                          damage_table$Var.4[damage_table$Name == player]) %>%
+        as.numeric()/100,
+      above90_percent = gsub('%', '', 
+                             damage_table$Var.5[damage_table$Name == player]) %>%
+        as.numeric()/100,
       downed_count = dps_table$Var.11[dps_table$Name == player],
-      dead_at = dps_table$Var.12[dps_table$Name == player],
+      dead_at = timeToSeconds(dps_table$Var.12[dps_table$Name == player]),
       subgroup = dps_table$Sub[dps_table$Name == player],
       wep1 = NA,
       wep2 = NA,
@@ -133,18 +157,21 @@ htmlParser <- function(parsed, team = 'NoTeam') {
     html_table() %>% .[[1]] %>% .[3:length(.)]
   names(boonTable) <- html_node(html, xpath = '//*[@id="boons_table0"]') %>% 
     html_nodes('th img') %>% html_attr('alt') %>% c('Name', .)
+  boonTable <- boonTable[1:parsed$encounter$numberOfPlayers,]
   
   offensiveTable <- html_node(html, xpath = '//*[@id="offensive_table0"]') %>% 
     html_table() %>% .[[1]] %>% .[3:length(.)]
   names(offensiveTable) <- html_node(html, 
                                      xpath = '//*[@id="offensive_table0"]') %>% 
     html_nodes('th img') %>% html_attr('alt') %>% c('Name', .)
+  offensiveTable <- offensiveTable[1:parsed$encounter$numberOfPlayers,]
   
   defensiveTable <- html_node(html, xpath = '//*[@id="defensive_table0"]') %>% 
     html_table() %>% .[[1]] %>% .[3:length(.)]
   names(defensiveTable) <- html_node(html, 
                                      xpath = '//*[@id="defensive_table0"]') %>% 
     html_nodes('th img') %>% html_attr('alt') %>% c('Name', .)
+  defensiveTable <- defensiveTable[1:parsed$encounter$numberOfPlayers,]
   
   # Bind all tables together
   buffTable <- merge(boonTable, offensiveTable, by = 'Name')
@@ -172,7 +199,11 @@ htmlParser <- function(parsed, team = 'NoTeam') {
               buffData = buffTable))
 }
 
-# Tester blocker
+sendData <- function(parsedResults) {
+  
+}
+
+# Tester block
 # setwd('~/gw2_raid_report/upload')
 # parsed <- content(POST(url = 'https://dps.report/uploadContent',
 #                        body = list(json = 1,
