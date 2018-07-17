@@ -212,7 +212,7 @@ sendData <- function(parsedResults) {
     host = '127.0.0.1',
     port = 3306,
     username = "root",
-    password = "andrexianstore")
+    password = "CHANGEME")
   
   # Forces exit when database finishes
   on.exit(dbDisconnect(conn), add = TRUE)
