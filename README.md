@@ -94,6 +94,7 @@ CREATE TABLE boss_attacks (
 CREATE TABLE team_info (
   team_id INT AUTO_INCREMENT PRIMARY KEY,
   team_name VARCHAR(50),
+  team_code VARCHAR(50),
   player1 VARCHAR(50),
   player2 VARCHAR(50),
   player3 VARCHAR(50),
@@ -110,6 +111,7 @@ CREATE TABLE team_info (
 INSERT INTO team_info VALUES(
   1, 
   'Potatos', 
+  'dhuumisdead',
   'blitzcreek.7019', 
   'Elestian.6134', 
   'MereLynn.9625', 

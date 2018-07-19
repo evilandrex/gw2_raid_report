@@ -4,6 +4,9 @@ library('httr')
 library('jsonlite')
 library('RMySQL')
 
+# SQL DB Password
+dbpass <- 'CHANGEME'
+
 timeToSeconds <- function(time) {
   time <- as.character(time)
   
@@ -24,7 +27,7 @@ timeToSeconds <- function(time) {
   return(seconds)
 }
 
-htmlParser <- function(parsed, team = 'Potatos') { # Implement team dropdown
+htmlParser <- function(parsed, team) { # Implement team dropdown
   # Read HTML link
   html <- read_html(parsed$permalink) %>% html_nodes('body')
   
@@ -49,7 +52,7 @@ htmlParser <- function(parsed, team = 'Potatos') { # Implement team dropdown
     host = '127.0.0.1',
     port = 3306,
     username = "root",
-    password = "CHANGEME")
+    password = dbpass)
   
   # Get player names
   teamPlayers <- dbGetQuery(conn, 
@@ -288,7 +291,7 @@ sendData <- function(parsedResults) {
     host = '127.0.0.1',
     port = 3306,
     username = "root",
-    password = "CHANGEME")
+    password = dbpass)
   
   # Forces exit when database finishes
   on.exit(dbDisconnect(conn), add = TRUE)
@@ -321,6 +324,20 @@ sendData <- function(parsedResults) {
   dbWriteTable(conn, 'boss_attacks', parsedResults$bossAttacks, 
                row.names = FALSE, append = TRUE)
 }
+
+# Get team names and codes
+conn <- dbConnect(
+  drv = MySQL(),
+  dbname = "raid_report",
+  host = '127.0.0.1',
+  port = 3306,
+  username = "root",
+  password = dbpass)
+
+team_info <- dbGetQuery(conn, 'SELECT team_name, team_code FROM team_info')
+
+# Disconnect from database
+dbDisconnect(conn)
 
 # Tester block
 # setwd('~/gw2_raid_report/upload')
