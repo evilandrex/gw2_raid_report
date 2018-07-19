@@ -39,16 +39,22 @@ shinyServer(function(input, output, session) {
           # Convert parsed data into dataframes
           dataframes <- htmlParser(parsed)
           
-          # Write data to SQL database
-          sendData(dataframes)
-          
-          # Increment progress for database saving
-          progress$inc(amount = 0.5)
-          
-          # Update output text 
-          outputText <- rbind(outputText, data.frame('File' = inFile$name[file],
-                                                     'Link' = parsed$permalink,
-                                                     'Report' = 'Success')) # NOTE: NEED TO IMPLEMENT THIS
+          if (typeof(dataframes) == 'list'){
+            # Write data to SQL database
+            sendData(dataframes)
+            
+            # Increment progress for database saving
+            progress$inc(amount = 0.5)
+            
+            # Update output text 
+            outputText <- rbind(outputText, data.frame('File' = inFile$name[file],
+                                                       'Link' = parsed$permalink,
+                                                       'Report' = 'Success'))
+          } else {
+            outputText <- rbind(outputText, data.frame('File' = inFile$name[file],
+                                                       'Link' = parsed$permalink,
+                                                       'Report' = dataframes))
+          }
         }
       }
       progress$close()

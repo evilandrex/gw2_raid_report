@@ -24,9 +24,41 @@ timeToSeconds <- function(time) {
   return(seconds)
 }
 
-htmlParser <- function(parsed, team = 'NoTeam') {
+htmlParser <- function(parsed, team = 'Potatos') { # Implement team dropdown
+  # Read HTML link
   html <- read_html(parsed$permalink) %>% html_nodes('body')
   
+  # Check fight duration
+  duration <- html_node(html, 
+                        xpath = '/html/body/div/div[1]/div[1]/div/div/blockquote/div/div[2]/p[3]') %>% 
+    html_text %>% strsplit(' ')
+  minutes <- substr(duration[[1]][2], 1, nchar(duration[[1]][2]) - 1) %>%
+    as.numeric() * 60
+  duration <- substr(duration[[1]][3], 1, nchar(duration[[1]][3]) - 1) %>%
+    as.numeric() + minutes
+  
+  # Return too short if duration is less than 60 seconds
+  if (duration < 60) {
+    return('Too short!')
+  }
+  
+  # Connect to database
+  conn <- dbConnect(
+    drv = MySQL(),
+    dbname = "raid_report",
+    host = '127.0.0.1',
+    port = 3306,
+    username = "root",
+    password = "CHANGEME")
+  
+  # Get player names
+  teamPlayers <- dbGetQuery(conn, 
+                            paste('SELECT * FROM team_info WHERE team_name = "', 
+                                   team, '"', sep = ''))[3:12]
+  
+  # Disconnect from database
+  dbDisconnect(conn)
+
   # Get percent damage done by boss
   bossOutputString <- html_nodes(html, xpath = '//*[@id="home406_0"]') %>% 
     html_nodes('div') %>% html_text() %>% .[2]
@@ -35,6 +67,11 @@ htmlParser <- function(parsed, team = 'NoTeam') {
   bossOutputString <- bossOutputString[length(bossOutputString)] %>% 
     as.numeric() / 100
   
+  # Turn players into a vector of account names and find missing players
+  present_players <- sapply(parsed$players, function(x) x$display_name)
+  missing_players <- paste(teamPlayers[!teamPlayers %in% present_players], 
+                           collapse = ',')
+  
   # Encounter data frame with some blanks
   encounterData <- data.frame(
     fight_id = parsed$id,
@@ -42,7 +79,7 @@ htmlParser <- function(parsed, team = 'NoTeam') {
     boss = parsed$encounter$boss,
     success = as.numeric(parsed$encounter$success),
     date = parsed$encounterTime, 
-    duration = NA, 
+    duration = duration, 
     team_dps = NA, 
     damage_done = NA,
     player1 = try(parsed$players[[1]]$character_name, silent = TRUE),
@@ -55,6 +92,7 @@ htmlParser <- function(parsed, team = 'NoTeam') {
     player8 = try(parsed$players[[8]]$character_name, silent = TRUE),
     player9 = try(parsed$players[[9]]$character_name, silent = TRUE),
     player10 = try(parsed$players[[10]]$character_name, silent = TRUE),
+    missing_players = missing_players,
     boss_damage = bossOutputString
   )
   
@@ -77,16 +115,6 @@ htmlParser <- function(parsed, team = 'NoTeam') {
   
   # Bind statuses to encounter data
   encounterData <- cbind(encounterData, bossStatus[,2:length(bossStatus)])
-
-  # Add fight duration
-  duration <- html_node(html, 
-                        xpath = '/html/body/div/div[1]/div[1]/div/div/blockquote/div/div[2]/p[3]') %>% 
-    html_text %>% strsplit(' ')
-  minutes <- substr(duration[[1]][2], 1, nchar(duration[[1]][2]) - 1) %>%
-    as.numeric() * 60
-  duration <- substr(duration[[1]][3], 1, nchar(duration[[1]][3]) - 1) %>%
-    as.numeric() + minutes
-  encounterData$duration <- duration
   
   # DPS data table
   dps_table <- html_nodes(html, xpath = '//*[@id="dps_table0"]') %>% 
@@ -95,6 +123,12 @@ htmlParser <- function(parsed, team = 'NoTeam') {
   # Add total dps to encounter data and calcualte total damage
   encounterData$team_dps <- dps_table$Boss.DPS[dps_table$Name == 'Total']
   encounterData$damage_done <- encounterData$duration * encounterData$team_dps
+  
+  # Check if no damage was done to boss 
+  # NOTE: Temporary measure
+  if (encounterData$damage_done < 15000) {
+    return('Not enough damage!')
+  }
   
   # DPS_statistic table
   damage_table <- html_nodes(html, xpath = '//*[@id="dmgstatsBoss_table0"]') %>%
@@ -110,7 +144,7 @@ htmlParser <- function(parsed, team = 'NoTeam') {
   # Create empty dataframe
   playerData <- data.frame()
   
-  # Get data for each player
+  # Get data for each player # NOTE: Fix dead-at for failures such that everyone is dead.
   playerNames <- names(parsed$players)
   for (player in playerNames) {
     playerInfo <- eval(parse(text = paste('parsed$player$"', player, '"', 
@@ -210,6 +244,7 @@ htmlParser <- function(parsed, team = 'NoTeam') {
   # Rename columns for sql
   names(buffTable)[1] <- 'char_name'
   names(buffTable) <- gsub(' ', '_', tolower(names(buffTable)))
+  names(buffTable) <- gsub("'", '', names(buffTable))
   
   # Get index of percentage columns
   percentageIndex <- which(sapply(buffTable, typeof) == 'character')
@@ -225,8 +260,8 @@ htmlParser <- function(parsed, team = 'NoTeam') {
   buffTable$fight_id <- parsed$id
   
   # Get boss damage
-  bossAttacks <- html_node(html, xpath = '//*[@id="dist_table_406_0"]') %>% 
-    html_table() %>% .[[1]]
+  bossAttacks <- html_node(html, xpath = '//*[@id="bossSummary0"]') %>% 
+    html_nodes('table') %>% html_table() %>% .[[2]]
   bossAttacks <- bossAttacks[!is.na(bossAttacks$Damage) & 
                                !bossAttacks$Skill == 'Total',]
   
@@ -273,7 +308,7 @@ sendData <- function(parsedResults) {
   
   # Add columns as necessary
   for (newColumn in buffToAdd) {
-    query <- 'ALTER TABLE buff_data ADD ?newColumn FLOAT;'
+    query <- "ALTER TABLE buff_data ADD ?newColumn FLOAT;"
     query <- sqlInterpolate(conn, query, newColumn = as.factor(newColumn))
     dbGetQuery(conn, query)
   }

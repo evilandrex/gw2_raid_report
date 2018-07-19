@@ -25,6 +25,7 @@ CREATE TABLE encounter_data (
   player8 VARCHAR(50),
   player9 VARCHAR(50),
   player10 VARCHAR(50),
+  missing_players VARCHAR(100),
   boss_damage FLOAT,
   bleeding FLOAT,
   burning FLOAT,
@@ -105,4 +106,18 @@ CREATE TABLE team_info (
   player10 VARCHAR(50)
 );
 
+
+INSERT INTO team_info VALUES(
+  1, 
+  'Potatos', 
+  'blitzcreek.7019', 
+  'Elestian.6134', 
+  'MereLynn.9625', 
+  'Vice.3164', 
+  'Evil Andrex.8160', 
+  'Burkid.4178', 
+  'LucianTheAngelic.7054', 
+  'PlasmaPunch.6281', 
+  'kratox.3675', 
+  'tunacom.6958');
 ```
