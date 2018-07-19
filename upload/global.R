@@ -27,6 +27,14 @@ timeToSeconds <- function(time) {
 htmlParser <- function(parsed, team = 'NoTeam') {
   html <- read_html(parsed$permalink) %>% html_nodes('body')
   
+  # Get percent damage done by boss
+  bossOutputString <- html_nodes(html, xpath = '//*[@id="home406_0"]') %>% 
+    html_nodes('div') %>% html_text() %>% .[2]
+  bossOutputString <- strsplit(bossOutputString, '%')[[1]][1] %>% 
+    strsplit(' ') %>% .[[1]]
+  bossOutputString <- bossOutputString[length(bossOutputString)] %>% 
+    as.numeric() / 100
+  
   # Encounter data frame with some blanks
   encounterData <- data.frame(
     fight_id = parsed$id,
@@ -46,8 +54,29 @@ htmlParser <- function(parsed, team = 'NoTeam') {
     player7 = try(parsed$players[[7]]$character_name, silent = TRUE),
     player8 = try(parsed$players[[8]]$character_name, silent = TRUE),
     player9 = try(parsed$players[[9]]$character_name, silent = TRUE),
-    player10 = try(parsed$players[[10]]$character_name, silent = TRUE)
+    player10 = try(parsed$players[[10]]$character_name, silent = TRUE),
+    boss_damage = bossOutputString
   )
+  
+  # Get boss condi/boon table
+  bossStatus <- html_nodes(html, xpath = '//*[@id="condi_table0"]') %>% 
+    html_table() %>% .[[1]]
+  
+  # Get condi/boon names
+  statusNames <- html_nodes(html, xpath = '//*[@id="condi_table0"]') %>% 
+    html_nodes('img') %>% html_attr('alt')
+  
+  # Add status names
+  names(bossStatus) <- c('Name', tolower(statusNames))
+  
+  # Change percentages into floats
+  bossStatus[,2:length(bossStatus)] <- lapply(bossStatus[,2:length(bossStatus)], 
+                                              function(x) if (grepl('%', x)) 
+                                                {as.numeric(gsub('%', '', x)) / 
+                                                  100} else {x})
+  
+  # Bind statuses to encounter data
+  encounterData <- cbind(encounterData, bossStatus[,2:length(bossStatus)])
 
   # Add fight duration
   duration <- html_node(html, 
@@ -74,6 +103,10 @@ htmlParser <- function(parsed, team = 'NoTeam') {
   # Get composition table
   composition <- html_nodes(html, 'div table')[1] %>% html_children()
   
+  # Get incoming damage table
+  incoming_table <- html_node(html, xpath = '//*[@id="defstats_table0"]') %>% 
+    html_table() %>% .[[1]]
+  
   # Create empty dataframe
   playerData <- data.frame()
   
@@ -86,11 +119,10 @@ htmlParser <- function(parsed, team = 'NoTeam') {
       fight_id = parsed$id,
       player_name = playerInfo$display_name,
       char_name = player,
-      #NOTE: Need to figure out what happens to core professions
       specialization = read_json(
         paste('https://api.guildwars2.com/v2/specializations', 
               playerInfo$elite_spec, 
-              sep = '/'))$name, 
+              sep = '/'))$name, #NOTE: Need to figure out what happens to core professions
       total_dps = dps_table$Boss.DPS[dps_table$Name == player],
       power_dps = dps_table$Power[dps_table$Name == player],
       condi_dps = dps_table$Condi[dps_table$Name == player],
@@ -107,7 +139,8 @@ htmlParser <- function(parsed, team = 'NoTeam') {
       wep2 = NA,
       wep3 = NA,
       wep4 = NA, 
-      gear_stats = NA
+      gear_stats = NA,
+      dmg_taken = incoming_table$'Dmg Taken'[incoming_table$Name == player]
     )
     
     # Determine which tile to look at for build info
@@ -130,11 +163,8 @@ htmlParser <- function(parsed, team = 'NoTeam') {
         weapon_counter <- weapon_counter + 1
         
         # Apply string to the correct weapon slot
-        weaponStringer <- paste('playerTemp$wep', 
-                                weapon_counter, 
-                                ' <- "', 
-                                string, 
-                                '"', sep = '')
+        weaponStringer <- paste('playerTemp$wep', weapon_counter, ' <- "', 
+                                string, '"', sep = '')
         eval(parse(text = weaponStringer))
       } else { # It is a gear stat
         gear_stats <- paste(gear_stats, string, sep = ',')
@@ -194,17 +224,28 @@ htmlParser <- function(parsed, team = 'NoTeam') {
   # Add fight_id to table
   buffTable$fight_id <- parsed$id
   
+  # Get boss damage
+  bossAttacks <- html_node(html, xpath = '//*[@id="dist_table_406_0"]') %>% 
+    html_table() %>% .[[1]]
+  bossAttacks <- bossAttacks[!is.na(bossAttacks$Damage) & 
+                               !bossAttacks$Skill == 'Total',]
+  
+  # Remove unwanted columns
+  bossAttacks <- bossAttacks[c('Skill', 'Damage', 'Hits per Cast')]
+  
+  # Rename columns
+  names(bossAttacks) <- c('skill_name', 'damage_dealt', 'hits_percast')
+  
+  # Add fight_id
+  bossAttacks$fight_id <- parsed$id
+  
   return(list(encounterData = encounterData,
               playerData = playerData,
-              buffData = buffTable))
+              buffData = buffTable,
+              bossAttacks = bossAttacks))
 }
 
 sendData <- function(parsedResults) {
-  # Piece out dataframes from parsedResults
-  enc <- parsedResults$encounterData
-  play <- parsedResults$playerData
-  buff <- parsedResults$buffData
-  
   # Connect to database
   conn <- dbConnect(
     drv = MySQL(),
@@ -217,96 +258,18 @@ sendData <- function(parsedResults) {
   # Forces exit when database finishes
   on.exit(dbDisconnect(conn), add = TRUE)
   
-  # Create query string with empty spots
-  query <- paste(
-    'INSERT INTO encounter_data SET ',
-    'fight_id = ?fight_id, ',
-    'team = ?team, ',
-    'boss = ?boss, ',
-    'success = ?success, ',
-    'date = ?date, ',
-    'duration = ?duration, ',
-    'team_dps = ?team_dps, ',
-    'damage_done = ?damage_done, ',
-    'player1 = ?player1, ',
-    'player2 = ?player2, ',
-    'player3 = ?player3, ',
-    'player4 = ?player4, ',
-    'player5 = ?player5, ',
-    'player6 = ?player6, ',
-    'player7 = ?player7, ',
-    'player8 = ?player8, ',
-    'player9 = ?player9, ',
-    'player10 = ?player10',
-    sep = '')
-  query <- sqlInterpolate(conn, query, 
-                          fight_id = as.character(enc$fight_id),
-                          team = as.character(enc$team),
-                          boss = as.character(enc$boss),
-                          success = enc$success,
-                          date = enc$date,
-                          duration = enc$duration,
-                          team_dps = enc$team_dps,
-                          damage_done = enc$damage_done,
-                          player1 = as.character(enc$player1),
-                          player2 = as.character(enc$player2),
-                          player3 = as.character(enc$player3),
-                          player4 = as.character(enc$player4),
-                          player5 = as.character(enc$player5),
-                          player6 = as.character(enc$player6),
-                          player7 = as.character(enc$player7),
-                          player8 = as.character(enc$player8),
-                          player9 = as.character(enc$player9),
-                          player10 = as.character(enc$player10)
-                          )
-  dbGetQuery(conn, query)
+  # Add encounter dataframe
+  dbWriteTable(conn, 'encounter_data', parsedResults$encounterData, 
+               row.names = FALSE, append = TRUE)
   
-  playQuery <- paste(
-    'INSERT INTO player_data SET ',
-    'fight_id = ?fight_id, ',
-    'player_name = ?player_name, ',
-    'char_name = ?char_name, ',
-    'specialization = ?specialization, ',
-    'total_dps = ?total_dps, ',
-    'power_dps = ?power_dps, ',
-    'condi_dps = ?condi_dps, ',
-    'crit_percent = ?crit_percent, ',
-    'above90_percent = ?above90_percent, ',
-    'downed_count = ?downed_count, ',
-    'dead_at = ?dead_at, ',
-    'subgroup = ?subgroup, ',
-    'wep1 = ?wep1, ',
-    'wep2 = ?wep2, ',
-    'wep3 = ?wep3, ',
-    'wep4 = ?wep4, ',
-    'gear_stats = ?gear_stats',
-    sep = '')
-  
-  for (player in 1:nrow(play)) {
-    query <- sqlInterpolate(conn, playQuery,
-                            fight_id = as.character(play$fight_id[player]),
-                            player_name = as.character(play$player_name[player]),
-                            char_name = as.character(play$char_name[player]),
-                            specialization = as.character(play$specialization[player]),
-                            total_dps = play$total_dps[player],
-                            power_dps = play$power_dps[player],
-                            condi_dps = play$condi_dps[player],
-                            crit_percent = play$crit_percent[player],
-                            above90_percent = play$above90_percent[player],
-                            downed_count = play$downed_count[player],
-                            dead_at = play$dead_at[player],
-                            subgroup = play$subgroup[player],
-                            wep1 = as.character(play$wep1[player]),
-                            wep2 = as.character(play$wep2[player]),
-                            wep3 = as.character(play$wep3[player]),
-                            wep4 = as.character(play$wep4[player]),
-                            gear_stats = as.character(play$gear_stats[player]))
-    dbGetQuery(conn, query)
-  }
+  # Add player dataframe
+  dbWriteTable(conn, 'player_data', parsedResults$playerData, 
+               row.names = FALSE, append = TRUE)
   
   # Check if any new columns need to be made
   buffList <- dbGetQuery(conn, 'SHOW COLUMNS FROM buff_data')$Field
-  buffToAdd <- names(buff)[!names(buff) %in% buffList]
+  buffToAdd <- names(parsedResults$buffData)[!names(parsedResults$buffData) %in% 
+                                               buffList]
   
   # Add columns as necessary
   for (newColumn in buffToAdd) {
@@ -315,51 +278,13 @@ sendData <- function(parsedResults) {
     dbGetQuery(conn, query)
   }
   
-  # Create buff query
-  buffQuery <- paste(
-    'INSERT INTO buff_data SET ',
-    'fight_id = ?fight_id, ',
-    'player_name = ?player_name, ',
-    'char_name = ?char_name, ',
-    'specialization = ?specialization, ',
-    'total_dps = ?total_dps, ',
-    'power_dps = ?power_dps, ',
-    'condi_dps = ?condi_dps, ',
-    'crit_percent = ?crit_percent, ',
-    'above90_percent = ?above90_percent, ',
-    'downed_count = ?downed_count, ',
-    'dead_at = ?dead_at, ',
-    'subgroup = ?subgroup, ',
-    'wep1 = ?wep1, ',
-    'wep2 = ?wep2, ',
-    'wep3 = ?wep3, ',
-    'wep4 = ?wep4, ',
-    'gear_stats = ?gear_stats',
-    sep = '')
+  # Add buff data
+  dbWriteTable(conn, 'buff_data', parsedResults$buffData, row.names = FALSE,
+               append = TRUE)
   
-  # Get new buffList
-  buffList <- dbGetQuery(conn, 'SHOW COLUMNS FROM buff_data')$Field
-  
-  # Create new query to insert data based on available columns
-  buffQuery = 'INSERT INTO buff_data SET '
-  buffQuery = paste(buffQuery, 
-                    paste(buffList, " = ?", buffList, sep = '', collapse = ', '), 
-                    sep = '')
-  buffList <- buffList[3:length(buffList)]
-  
-  # Add buff data per player
-  for (player in 1:nrow(play)) {
-    # Create strings for query
-    baseString <- paste('query <- sqlInterpolate(conn, buffQuery, ',
-                        'fight_id = buff$fight_id[player], ',
-                        'char_name = buff$char_name[player], ', sep = '')
-    buffString <- paste(buffList, ' = buff$', buffList, '[player]', 
-                       sep = '', collapse = ', ')
-    fullString <- paste(baseString, buffString, ')', sep = '')
-    eval(parse(text = fullString))
-    
-    dbGetQuery(conn, query)
-  }
+  # Add boss attacks table to database
+  dbWriteTable(conn, 'boss_attacks', parsedResults$bossAttacks, 
+               row.names = FALSE, append = TRUE)
 }
 
 # Tester block
