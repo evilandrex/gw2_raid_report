@@ -6,15 +6,15 @@ shinyServer(function(input, output, session) {
       # Check team code
       if (input$team_code %in% team_info$team_code) {
         team <- team_info$team_name
-      } else if (input$team_code == '') { # Return default
-        return(data.frame('File' = 'File', 
-                          'Parsed' = 'Parsed', 
-                          'Report' = 'Report'))
+        if (is.null(input$evtc))	
+          return(data.frame('File' = 'File', 	
+                            'Parsed' = 'Parsed', 	
+                            'Report' = 'Report'))
       } else {
         # Return invalid code
         return(data.frame('File' = 'INVALID CODE',
-                          'Parsed' = 'INVALID CODE',
-                          'Report' = 'INVALID CODE'))  
+                          'Parsed' = 'REFRESH PAGE',
+                          'Report' = 'TRY AGAIN'))  
       }
       
       inFile <- input$evtc
