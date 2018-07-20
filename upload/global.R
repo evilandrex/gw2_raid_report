@@ -144,6 +144,12 @@ htmlParser <- function(parsed, team) { # Implement team dropdown
   incoming_table <- html_node(html, xpath = '//*[@id="defstats_table0"]') %>% 
     html_table() %>% .[[1]]
   
+  # Get indexed subgroups
+  indexedSubs <- unique(dps_table$Sub) %>% .[!is.na(.)] %>% sort()
+  
+  # Get classes
+  professions <- unlist(read_json('https://api.guildwars2.com/v2/professions'))
+  
   # Create empty dataframe
   playerData <- data.frame()
   
@@ -152,14 +158,18 @@ htmlParser <- function(parsed, team) { # Implement team dropdown
   for (player in playerNames) {
     playerInfo <- eval(parse(text = paste('parsed$player$"', player, '"', 
                                           sep = '')))
+    
+    # Get elite spec but with main class backup
+    specialization <- professions[playerInfo$profession][[1]]
+    try({specialization <- read_json(paste('https://api.guildwars2.com/v2/specializations', 
+                                           playerInfo$elite_spec, 
+                                           sep = '/'))$name}, silent = T)
+    
     playerTemp <- data.frame(
       fight_id = parsed$id,
       player_name = playerInfo$display_name,
       char_name = player,
-      specialization = read_json(
-        paste('https://api.guildwars2.com/v2/specializations', 
-              playerInfo$elite_spec, 
-              sep = '/'))$name, #NOTE: Need to figure out what happens to core professions
+      specialization = specialization,
       total_dps = dps_table$Boss.DPS[dps_table$Name == player],
       power_dps = dps_table$Power[dps_table$Name == player],
       condi_dps = dps_table$Condi[dps_table$Name == player],
@@ -181,7 +191,8 @@ htmlParser <- function(parsed, team) { # Implement team dropdown
     )
     
     # Determine which tile to look at for build info
-    buildBlocks <- composition[playerTemp$subgroup] %>% html_children()
+    buildBlocks <- composition[match(playerTemp$subgroup, indexedSubs)] %>% 
+      html_children()
     buildStrings <- buildBlocks[which(grepl(substr(player, 1, 10), 
                                             html_text(buildBlocks)))] %>%
       html_nodes('img') %>% html_attr('alt') %>% .[2:length(.)]
@@ -222,23 +233,35 @@ htmlParser <- function(parsed, team) { # Implement team dropdown
   # Generate buff tables
   boonTable <- html_node(html, xpath = '//*[@id="boons_table0"]') %>% 
     html_table() %>% .[[1]] %>% .[3:length(.)]
-  names(boonTable) <- html_node(html, xpath = '//*[@id="boons_table0"]') %>% 
-    html_nodes('th img') %>% html_attr('alt') %>% c('Name', .)
-  boonTable <- boonTable[1:parsed$encounter$numberOfPlayers,]
   
+  # Check if boon table is populated to give games
+  if (!length(boonTable) == 1) {
+    names(boonTable) <- html_node(html, xpath = '//*[@id="boons_table0"]') %>% 
+      html_nodes('th img') %>% html_attr('alt') %>% c('Name', .)
+    boonTable <- boonTable[1:parsed$encounter$numberOfPlayers,]
+  }
+      
   offensiveTable <- html_node(html, xpath = '//*[@id="offensive_table0"]') %>% 
     html_table() %>% .[[1]] %>% .[3:length(.)]
-  names(offensiveTable) <- html_node(html, 
-                                     xpath = '//*[@id="offensive_table0"]') %>% 
-    html_nodes('th img') %>% html_attr('alt') %>% c('Name', .)
-  offensiveTable <- offensiveTable[1:parsed$encounter$numberOfPlayers,]
+  
+  # Check if offensive table is populated to give games
+  if (!length(offensiveTable) == 1) {
+    names(offensiveTable) <- html_node(html, 
+                                       xpath = '//*[@id="offensive_table0"]') %>% 
+      html_nodes('th img') %>% html_attr('alt') %>% c('Name', .)
+    offensiveTable <- offensiveTable[1:parsed$encounter$numberOfPlayers,]
+  }
   
   defensiveTable <- html_node(html, xpath = '//*[@id="defensive_table0"]') %>% 
     html_table() %>% .[[1]] %>% .[3:length(.)]
-  names(defensiveTable) <- html_node(html, 
-                                     xpath = '//*[@id="defensive_table0"]') %>% 
-    html_nodes('th img') %>% html_attr('alt') %>% c('Name', .)
-  defensiveTable <- defensiveTable[1:parsed$encounter$numberOfPlayers,]
+  
+  # Check if defensive table is populated to give games
+  if (!length(defensiveTable) == 1) {
+    names(defensiveTable) <- html_node(html, 
+                                       xpath = '//*[@id="defensive_table0"]') %>% 
+      html_nodes('th img') %>% html_attr('alt') %>% c('Name', .)
+    defensiveTable <- defensiveTable[1:parsed$encounter$numberOfPlayers,] 
+  }
   
   # Bind all tables together
   buffTable <- merge(boonTable, offensiveTable, by = 'Name')
@@ -341,10 +364,10 @@ dbDisconnect(conn)
 
 # Tester block
 # setwd('~/gw2_raid_report/upload')
-# parsed <- content(POST(url = 'https://dps.report/uploadContent',
-#                        body = list(json = 1,
-#                                    generator = 'ei',
-#                                    userToken = 'kltu2he26nvdrk0451atc1s2p2',
-#                                    file = upload_file('./20180713-222530.evtc.zip')
-#                        )))
-# results <- htmlParser(parsed)
+parsed <- content(POST(url = 'https://dps.report/uploadContent',
+                       body = list(json = 1,
+                                   generator = 'ei',
+                                   userToken = 'kltu2he26nvdrk0451atc1s2p2',
+                                   file = upload_file('./20180710-213313.evtc.zip')
+                       )))
+results <- htmlParser(parsed, 'Potatos')
