@@ -5,7 +5,7 @@ library('jsonlite')
 library('RMySQL')
 
 # SQL DB Password
-dbpass <- 'andrexianstorage'
+dbpass <- 'CHANGEME'
 
 timeToSeconds <- function(time) {
   time <- as.character(time)
