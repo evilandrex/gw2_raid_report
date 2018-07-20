@@ -5,7 +5,7 @@ library('jsonlite')
 library('RMySQL')
 
 # SQL DB Password
-dbpass <- 'CHANGEME'
+dbpass <- 'andrexianstorage'
 
 timeToSeconds <- function(time) {
   time <- as.character(time)
@@ -53,6 +53,7 @@ htmlParser <- function(parsed, team) { # Implement team dropdown
     port = 3306,
     username = "root",
     password = dbpass)
+  #on.exit(dbDisconnect(conn), add = TRUE)
   
   # Get player names
   teamPlayers <- dbGetQuery(conn, 
@@ -153,7 +154,7 @@ htmlParser <- function(parsed, team) { # Implement team dropdown
   # Create empty dataframe
   playerData <- data.frame()
   
-  # Get data for each player # NOTE: Fix dead-at for failures such that everyone is dead.
+  # Get data for each player
   playerNames <- names(parsed$players)
   for (player in playerNames) {
     playerInfo <- eval(parse(text = paste('parsed$player$"', player, '"', 
@@ -164,6 +165,13 @@ htmlParser <- function(parsed, team) { # Implement team dropdown
     try({specialization <- read_json(paste('https://api.guildwars2.com/v2/specializations', 
                                            playerInfo$elite_spec, 
                                            sep = '/'))$name}, silent = T)
+    
+    # Calculate dead at in seconds
+    dead_at <- timeToSeconds(dps_table$Var.12[dps_table$Name == player])
+    # If run was a failure and dead_at is 0, change it to end of run
+    if (dead_at == 0 & encounterData$success == 0) {
+      dead_at <- encounterData$duration
+    }
     
     playerTemp <- data.frame(
       fight_id = parsed$id,
@@ -180,7 +188,7 @@ htmlParser <- function(parsed, team) { # Implement team dropdown
                              damage_table$Var.5[damage_table$Name == player]) %>%
         as.numeric()/100,
       downed_count = dps_table$Var.11[dps_table$Name == player],
-      dead_at = timeToSeconds(dps_table$Var.12[dps_table$Name == player]),
+      dead_at = dead_at,
       subgroup = dps_table$Sub[dps_table$Name == player],
       wep1 = NA,
       wep2 = NA,

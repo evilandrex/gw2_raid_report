@@ -1,7 +1,7 @@
 library(shiny)
 
 shinyUI(fluidPage(
-  conditionalPanel(condition = 'input.submitButton == 0',
+  conditionalPanel(condition = 'input.submitButton == 0 || output.teamName == "Bad code"',
                    inputPanel(passwordInput('team_code', 'Team Code: ', value = "", 
                                             placeholder = 'Enter your unique team code'),
                               actionButton('submitButton', 'Submit'),
@@ -12,11 +12,17 @@ shinyUI(fluidPage(
                                       $("#submitButton").click();
                                     }
                                   }
-                                });'))),
-  conditionalPanel(condition = 'input.submitButton == 1',
-                   fileInput('evtc', 'EVTC Upload',
-                             accept = 'application/zip',
-                             multiple = TRUE)),
-  conditionalPanel(condition = 'input.submitButton == 1',
-                   tableOutput("fileName"))
-))
+                                });'),
+                              conditionalPanel(condition = 'input.submitButton > 0 && output.teamName == "Bad code"',
+                                               HTML('<div>Invalid code, please try again!</div>')))),
+  conditionalPanel(condition = 'input.submitButton > 0 && output.teamName != "Bad code"',
+                   fluidRow(
+                     column(4, 
+                            fileInput('evtc', 'EVTC Upload',
+                                      accept = 'application/zip',
+                                      multiple = TRUE)),
+                     column(8,
+                            h1(textOutput('teamName')))),
+                     fluidRow(
+                       dataTableOutput("fileName")))
+  ))

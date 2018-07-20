@@ -2,19 +2,17 @@ library(shiny)
 options(shiny.maxRequestSize=50*1024^2) 
 
 shinyServer(function(input, output, session) {
-    output$fileName <- renderTable({
+    output$fileName <- renderDataTable({
+      # Check if nothing has been uploaded.
+      if (is.null(input$evtc)) {
+        return(data.frame('File' = 'File', 	
+                          'Parsed' = 'Parsed', 	
+                          'Report' = 'Report'))
+      }
+      
       # Check team code
       if (input$team_code %in% team_info$team_code) {
         team <- team_info$team_name
-        if (is.null(input$evtc))	
-          return(data.frame('File' = 'File', 	
-                            'Parsed' = 'Parsed', 	
-                            'Report' = 'Report'))
-      } else {
-        # Return invalid code
-        return(data.frame('File' = 'INVALID CODE',
-                          'Parsed' = 'REFRESH PAGE',
-                          'Report' = 'TRY AGAIN'))  
       }
       
       inFile <- input$evtc
@@ -68,5 +66,14 @@ shinyServer(function(input, output, session) {
       progress$close()
       return(outputText)
       })
-  }
-)
+  
+  # Team name
+  output$teamName <- renderText({
+   if (input$team_code %in% team_info$team_code) {
+     return(team_info$team_name[team_info$team_code == input$team_code])
+   } else {
+     return('Bad code')
+   }
+  })
+  outputOptions(output, "teamName", suspendWhenHidden = FALSE)
+})
