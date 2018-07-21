@@ -1,5 +1,5 @@
-library("rvest")
-library('httr')
+library(rvest)
+library(httr)
 
 # Time to seconds functions
 timeToSeconds <- function(time) {
@@ -327,13 +327,13 @@ htmlParser <- function(parsed) {
 }
 
 # Test block
-if (interactive()) {
-  setwd('~/gw2_raid_report/upload')
-  parsed <- content(POST(url = 'https://dps.report/uploadContent',
-                         body = list(json = 1,
-                                     generator = 'ei',
-                                     userToken = 'kltu2he26nvdrk0451atc1s2p2',
-                                     file = upload_file('./20180713-222530.evtc.zip')
-                         )))
-  results <- htmlParser(parsed, 'Potatos')
-}
+# if (interactive()) {
+#   setwd('~/gw2_raid_report/upload')
+#   parsed <- content(POST(url = 'https://dps.report/uploadContent',
+#                          body = list(json = 1,
+#                                      generator = 'ei',
+#                                      userToken = 'kltu2he26nvdrk0451atc1s2p2',
+#                                      file = upload_file('./20180713-222530.evtc.zip')
+#                          )))
+#   results <- htmlParser(parsed, 'Potatos')
+# }

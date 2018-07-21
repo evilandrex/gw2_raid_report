@@ -5,7 +5,7 @@ library(RMySQL)
 options(shiny.maxRequestSize=50*1024^2) 
 
 # SQL DB Password
-dbpass <- 'CHANGME'
+dbpass <- 'CHANGEME'
 
 # Get team names and codes
 conn <- dbConnect(
