@@ -1,7 +1,28 @@
 library("rvest")
 library('httr')
 
-htmlParser <- function(parsed, team_info) {
+# Time to seconds functions
+timeToSeconds <- function(time) {
+  time <- as.character(time)
+  
+  if (time == '0') {
+    return(0)
+  }
+  
+  timeString <- strsplit(time, split = '\\w(?=[\\d])', perl = TRUE)[[1]]
+  seconds <- 0
+  for (string in timeString) {
+    if (strsplit(string, ' ')[[1]][2] == 'm') {
+      temp <- as.numeric(strsplit(string, ' ')[[1]][1]) * 60
+      seconds <- seconds + temp
+    } else {
+      seconds <- seconds + as.numeric(strsplit(string, ' ')[[1]][1])
+    }
+  }
+  return(seconds)
+}
+
+htmlParser <- function(parsed) {
   # Get just the relevant team
   team <- team_info[team_info$team_code == input$team_code,]
   
