@@ -1,6 +1,22 @@
 library(shiny)
 options(shiny.maxRequestSize=50*1024^2) 
 
+# Get team names and codes
+conn <- dbConnect(
+  drv = MySQL(),
+  dbname = "raid_report",
+  host = '127.0.0.1',
+  port = 3306,
+  username = "root",
+  password = dbpass)
+
+team_info <- dbGetQuery(conn, 'SELECT * FROM team_info')
+
+# Disconnect from database
+dbDisconnect(conn)
+
+source('html_parser.R')
+
 shinyServer(function(input, output, session) {
     output$fileName <- renderDataTable({
       # Check if nothing has been uploaded.
