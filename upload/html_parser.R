@@ -9,22 +9,23 @@ timeToSeconds <- function(time) {
     return(0)
   }
   
-  timeString <- strsplit(time, split = '\\w(?=[\\d])', perl = TRUE)[[1]]
+  timeString <- strsplit(time, split = '(?<=[a-z])', perl = TRUE)[[1]]
   seconds <- 0
   for (string in timeString) {
-    if (strsplit(string, ' ')[[1]][2] == 'm') {
-      temp <- as.numeric(strsplit(string, ' ')[[1]][1]) * 60
+    if (grepl('m', string)) {
+      temp <- as.numeric(substring(string, 1, nchar(string) - 2)) * 60
       seconds <- seconds + temp
     } else {
-      seconds <- seconds + as.numeric(strsplit(string, ' ')[[1]][1])
+      seconds <- seconds + 
+        as.numeric(substring(string, 1, nchar(string) - 2))
     }
   }
   return(seconds)
 }
 
-htmlParser <- function(parsed) {
+htmlParser <- function(parsed, team_info, team_code) {
   # Get just the relevant team
-  team <- team_info[team_info$team_code == input$team_code,]
+  team <- team_info[team_info$team_code == team_code,]
   
   # Read HTML link
   html <- read_html(parsed$permalink) %>% html_nodes('body')
@@ -69,19 +70,28 @@ htmlParser <- function(parsed) {
     duration = duration, 
     team_dps = NA, 
     damage_done = NA,
-    player1 = try(parsed$players[[1]]$character_name, silent = TRUE),
-    player2 = try(parsed$players[[2]]$character_name, silent = TRUE),
-    player3 = try(parsed$players[[3]]$character_name, silent = TRUE),
-    player4 = try(parsed$players[[4]]$character_name, silent = TRUE),
-    player5 = try(parsed$players[[5]]$character_name, silent = TRUE),
-    player6 = try(parsed$players[[6]]$character_name, silent = TRUE),
-    player7 = try(parsed$players[[7]]$character_name, silent = TRUE),
-    player8 = try(parsed$players[[8]]$character_name, silent = TRUE),
-    player9 = try(parsed$players[[9]]$character_name, silent = TRUE),
-    player10 = try(parsed$players[[10]]$character_name, silent = TRUE),
+    player1 = NA,
+    player2 = NA,
+    player3 = NA,
+    player4 = NA,
+    player5 = NA,
+    player6 = NA,
+    player7 = NA,
+    player8 = NA,
+    player9 = NA,
+    player10 = NA,
     missing_players = missing_players,
     boss_damage = bossOutputString
   )
+  
+  # Add players
+  counter <- 0
+  for (player in parsed$players) {
+    counter <- counter + 1
+    playerAssigner <- paste('encounterData$player', counter, 
+                            ' <- player$character_name', sep = '')
+    eval(parse(text = playerAssigner))
+  }
   
   # Get boss condi/boon table
   bossStatus <- html_nodes(html, xpath = '//*[@id="condi_table0"]') %>% 
@@ -130,7 +140,7 @@ htmlParser <- function(parsed) {
     html_table() %>% data.frame()
   
   # Add total dps to encounter data and calcualte total damage
-  encounterData$team_dps <- dps_table$Boss.DPS[dps_table$Name == 'Total']
+  encounterData$team_dps <- dps_table$Boss.DPS[nrow(dps_table)]
   encounterData$damage_done <- encounterData$duration * encounterData$team_dps
   
   # Check if no damage was done to boss 
@@ -329,11 +339,11 @@ htmlParser <- function(parsed) {
 # Test block
 # if (interactive()) {
 #   setwd('~/gw2_raid_report/upload')
-#   parsed <- content(POST(url = 'https://dps.report/uploadContent',
-#                          body = list(json = 1,
-#                                      generator = 'ei',
-#                                      userToken = 'kltu2he26nvdrk0451atc1s2p2',
-#                                      file = upload_file('./20180713-222530.evtc.zip')
-#                          )))
+# parsed <- content(POST(url = 'https://dps.report/uploadContent',
+#                        body = list(json = 1,
+#                                    generator = 'ei',
+#                                    userToken = 'kltu2he26nvdrk0451atc1s2p2',
+#                                    file = upload_file('./20180417-195626.evtc')
+#                        )))
 #   results <- htmlParser(parsed, 'Potatos')
 # }

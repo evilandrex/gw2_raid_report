@@ -107,26 +107,30 @@ shinyServer(function(input, output, session) {
           
           # Increment progress for finished dps.report parse
           progress$inc(amount = 0.5)
-          
-          # Convert parsed data into dataframes
-          dataframes <- htmlParser(parsed)
-          
-          if (typeof(dataframes) == 'list'){
-            # Write data to SQL database
-            sendData(dataframes)
-            
-            # Increment progress for database saving
+
+          # Try catch for error handling
+          tryCatch({
+            success <- 'Failed'
+            dataframes <- htmlParser(parsed, team_info, input$team_code)
+            if (typeof(dataframes) == 'list'){
+              # Write data to SQL database
+              sendData(dataframes)
+              success <- 'Success'
+            } else if (typeof(dataframes) == 'character') {
+              success <- dataframes
+            }
+          }, error = function(error) {
+            'Failed'
+          }, finally = {
+            # Increment progress
             progress$inc(amount = 0.5)
             
-            # Update output text 
+            # Update output text
             outputText <- rbind(outputText, data.frame('File' = inFile$name[file],
                                                        'Link' = parsed$permalink,
-                                                       'Report' = 'Success'))
-          } else {
-            outputText <- rbind(outputText, data.frame('File' = inFile$name[file],
-                                                       'Link' = parsed$permalink,
-                                                       'Report' = dataframes))
-          }
+                                                       'Report' = success))
+          })
+          
         }
       }
       progress$close()
