@@ -2,6 +2,51 @@ library(shiny)
 library(plotly)
 library(plyr)
 
+# Team name
+teamName = 'Potatos'
+
+# SQL DB Password
+dbpass <- 'CHANGEME'
+
+# Get team names and codes
+conn <- dbConnect(
+  drv = MySQL(),
+  dbname = "raid_report",
+  host = '127.0.0.1',
+  port = 3306,
+  username = "root",
+  password = dbpass)
+
+team_info <- dbGetQuery(conn,
+                        paste('SELECT * FROM team_info WHERE team_name = "', 
+                              teamName, '"', sep = ''))
+
+encounter_data <- dbGetQuery(conn, 
+                             paste('SELECT * FROM encounter_data ',
+                                   'WHERE team = "', teamName, '"',
+                                   sep = ''))
+buff_data <- dbGetQuery(conn, 
+                        paste('SELECT buff_data.* FROM buff_data ',
+                              'INNER JOIN encounter_data ON ',
+                              'buff_data.fight_id = encounter_data.fight_id ',
+                              'WHERE encounter_data.team = "', teamName, '"',
+                              sep = ''))
+player_data <- dbGetQuery(conn,
+                          paste('SELECT player_data.* FROM player_data ',
+                                'INNER JOIN encounter_data ON ',
+                                'player_data.fight_id = encounter_data.fight_id ',
+                                'WHERE encounter_data.team = "', teamName, '"',
+                                sep = ''))
+boss_attacks <- dbGetQuery(conn,
+                           paste('SELECT boss_attacks.* FROM boss_attacks ',
+                                 'INNER JOIN encounter_data ON ',
+                                 'boss_attacks.fight_id = encounter_data.fight_id ',
+                                 'WHERE encounter_data.team = "', teamName, '"',
+                                 sep = ''))
+
+# Disconnect from database
+dbDisconnect(conn)
+
 shinyServer(function(input, output, session) {
   
   #Makes single run drop down selecter reactive

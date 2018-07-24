@@ -1,8 +1,7 @@
 library(shiny)
 library(plotly)
 
-shinyUI(fluidPage(includeCSS('../assets/style.css'),
-                  
+shinyUI(fluidPage(
                   #Title Text
                   navbarPage("Raid Logs - GotL Removal Patch",
                              position = 'fixed-top'),
