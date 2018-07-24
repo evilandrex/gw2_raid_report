@@ -8,6 +8,7 @@ USE raid_report;
 
 CREATE TABLE encounter_data (
   fight_id VARCHAR(50) PRIMARY KEY,
+  log_link VARCHAR(50),
   team VARCHAR(50),
   boss VARCHAR(50),
   success INT,

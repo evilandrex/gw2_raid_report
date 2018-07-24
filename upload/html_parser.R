@@ -63,6 +63,7 @@ htmlParser <- function(parsed, team_info, team_code) {
   # Encounter data frame with some blanks
   encounterData <- data.frame(
     fight_id = parsed$id,
+    log_link = parsed$permalink,
     team = team$team_name,
     boss = parsed$encounter$boss,
     success = as.numeric(parsed$encounter$success),
